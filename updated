@@ -81,9 +81,9 @@ class XMProfileFields extends Component {
             DELETE_SELECTED_MASTER_AGREEMENTS: () => {
                 this.deleteSelectedRows();
             },
-            VALIDATE_ECI_ON_BLUR: () => {
-                this.validateEciOnBlur();
-            },
+           VALIDATE_LEGAL_ENTITY_ID_ON_BLUR: () => {
+    this.validateLegalEntityIdOnBlur();
+},
             VALIDATE_SPN_ON_BLUR: () => {
                 this.validateSpnOnBlur();
             },
@@ -961,10 +961,80 @@ class XMProfileFields extends Component {
         }
     };
 
-    validateEciOnBlur = async () => {
-        // TODO  
-        console.log('ECI validation triggered');
-    };
+  validateLegalEntityIdOnBlur = async () => {
+    // This validation works within the modal popup context
+    let modalFormData = this.state.modal.formdata;
+    let hasValidationError = false;
+    let currentLegalEntityId = null;
+
+    if (modalFormData && modalFormData.data && modalFormData.data[0] && modalFormData.data[0].column) {
+        modalFormData.data[0].column.forEach(field => {
+            if (field.bind === 'legalEntityId' && field.value !== undefined) {
+                if (field.value === "" || field.value === null || typeof field.value === "undefined") {
+                    return;
+                }
+                
+                currentLegalEntityId = field.value.toString().trim();
+            }
+        });
+    }
+
+    // Call API to validate the Legal Entity ID if value exists
+    if (currentLegalEntityId && currentLegalEntityId.length > 0) {
+        try {
+            const validationResult = await API.validateEntityData(
+                { lei: currentLegalEntityId }, 
+                this.props.appState?.lob?.toUpperCase() || 'XM'
+            );
+
+            if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
+                const entityData = validationResult.payload[0];
+                
+                // Legal Entity ID is valid - update modal to enable save
+                this.setState({
+                    modal: {
+                        ...this.state.modal,
+                        disabled: false
+                    }
+                });
+
+                MessageBox.alert('Success', 'Legal Entity ID has been validated successfully.', 500);
+                
+                // Optionally populate additional fields if entity data is available
+                if (entityData.name && modalFormData && modalFormData.data && modalFormData.data[0] && modalFormData.data[0].column) {
+                    modalFormData.data[0].column.forEach(field => {
+                        if (field.bind === 'legalEntity' && (!field.value || field.value.trim() === '')) {
+                            field.value = entityData.name;
+                        }
+                    });
+                    
+                    // Update the modal formdata state
+                    this.setState({
+                        modal: {
+                            ...this.state.modal,
+                            formdata: modalFormData
+                        }
+                    });
+                }
+            } else {
+                hasValidationError = true;
+                MessageBox.error('Validation Error', 'Invalid Legal Entity ID. No matching entity found in the system.', 500);
+            }
+        } catch (error) {
+            console.warn('Legal Entity ID validation failed:', error);
+            hasValidationError = true;
+            MessageBox.error('Validation Error', 'Legal Entity ID validation failed. Please check the value and try again.', 500);
+        }
+    }
+
+    // Update the modal state to reflect validation results
+    this.setState({
+        modal: {
+            ...this.state.modal,
+            disabled: hasValidationError
+        }
+    });
+};
 
     validateHouseMultiplierOnBlur = () => {
         this.validateFieldOnBlur(
@@ -1379,7 +1449,3 @@ const mapDispatchToProps = (dispatch) => {
 };
 
 export default connect(mapStateToProps, mapDispatchToProps)(XMProfileFields);
-
-
-
-
