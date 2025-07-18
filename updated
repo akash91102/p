@@ -189,15 +189,27 @@ class XMProfileFields extends Component {
             newValues: masterAgreementsObj
         });
 
-        if (this.props.onCustFormUpdate) {
-            this.props.onCustFormUpdate(formData);
-        }
+        // Update component state first to trigger re-render
+        this.setState({ 
+            masterAgreements: [...agreementsArray],
+            lastUpdateTimestamp: Date.now() 
+        }, () => {
+            // Update parent form data after state is set
+            if (this.props.onCustFormUpdate) {
+                this.props.onCustFormUpdate(formData);
+            }
 
-        if (this.gridApiRefs["masterAgreements"]) {
-            this.gridApiRefs["masterAgreements"].setRowData([...agreementsArray]);
-        }
+            // Update grid data with a small delay to ensure state is synchronized
+            setTimeout(() => {
+                if (this.gridApiRefs["masterAgreements"] && this.gridApiRefs["masterAgreements"].setRowData) {
+                    this.gridApiRefs["masterAgreements"].setRowData([...agreementsArray]);
+                    // Force grid to refresh its display
+                    this.gridApiRefs["masterAgreements"].refreshCells();
+                }
+            }, 50);
 
-        if (callback) callback();
+            if (callback) callback();
+        });
     };
 
     editSelectedMasterAgreement = () => {
@@ -575,7 +587,18 @@ class XMProfileFields extends Component {
             const newMasterAgreements = this.getCurrentMasterAgreements();
             const validNewAgreements = Array.isArray(newMasterAgreements) ? newMasterAgreements : [];
 
-            if (this.gridApiRefs["masterAgreements"]) {
+            // Update state to track current agreements
+            const currentStateAgreements = Array.isArray(this.state.masterAgreements) ? this.state.masterAgreements : [];
+            
+            if (JSON.stringify(validNewAgreements) !== JSON.stringify(currentStateAgreements)) {
+                this.setState({
+                    masterAgreements: [...validNewAgreements],
+                    hasLocalChanges: false
+                });
+            }
+
+            // Always update grid when props change to ensure visual consistency
+            if (this.gridApiRefs["masterAgreements"] && this.gridApiRefs["masterAgreements"].setRowData) {
                 this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
             }
         }
