@@ -584,8 +584,16 @@ class XMProfileFields extends Component {
     setup = (config) => {
         let cloneData = cloneObject(this.props.data || {});
         this.initializeProfileData(cloneData);
+        
+        // Process inScope master agreements if they exist (primary data source)
+        if (objectExists(cloneData, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
+            this.handleOnInsertInScopeMasterAgreementsList(cloneData);
+        }
+        
+        // Process parties data for ECI and SPN
+        this.handleOnInsertInECPAndSPN(cloneData);
 
-        // Use processAndFlattenData instead of individual handlers
+        // Also check for crossMarginEntities as fallback
         this.processAndFlattenData(cloneData);
 
         let configSetupVar = configSetup({
@@ -603,6 +611,78 @@ class XMProfileFields extends Component {
     };
 
     // Added missing method from working version
+    // Added missing methods from original working version
+    handleOnInsertInECPAndSPN = (data) => {
+        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.parties.value')) {
+            const partiesObj = data.compositeProfile.legalAgreement.attributes.parties.value;
+            if (partiesObj && partiesObj.length > 0) {
+                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.eci', 'eci', partiesObj[0]?.eci);
+                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.counterparty', 'counterparty', partiesObj[0]?.name);
+                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.spn', 'spn', partiesObj[0]?.spn);
+            }
+        }
+    };
+
+    handleOnTraverseObjectAndInsert = (data, attribute, bindOn, value) => {
+        traverseObjectAndInsert({
+            obj: data,
+            string: attribute,
+            bindOn: bindOn,
+            newValues: value
+        });
+    };
+
+    handleOnInsertInScopeMasterAgreementsList = (data) => {
+        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
+            const flattenedAgreements = this.handleOnScopeMasterAgreementsFlattenData(data);
+            traverseObjectAndInsert({
+                obj: data,
+                string: 'compositeProfile.legalAgreement.attributes.masterAgreements',
+                bindOn: 'masterAgreements',
+                newValues: {
+                    source: 'USER',
+                    sourceId: this.props.userInfo?.username || 'system',
+                    value: flattenedAgreements
+                }
+            });
+            
+            // Update state with the flattened agreements
+            this.setState({
+                masterAgreements: flattenedAgreements
+            });
+        }
+    };
+
+    handleOnScopeMasterAgreementsFlattenData = (data) => {
+        let inScopeMasterAgreementsList = [];
+        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
+            const inScopeMasterAgreeValue = data.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements?.value;
+            if (inScopeMasterAgreeValue && inScopeMasterAgreeValue.length > 0) {
+                inScopeMasterAgreeValue.forEach(item => {
+                    if (item?.attributes?.parties?.value) {
+                        const legalOwner = item.attributes.parties.value.filter(v => v.role === "LEGAL_OWNER");
+                        if (legalOwner && legalOwner.length > 0) {
+                            inScopeMasterAgreementsList.push({
+                                lineOfBusiness: item?.lineOfBusiness || '',
+                                agreementId: item?.attributes?.masterAgreementNumber?.value || '',
+                                eci: legalOwner[0]?.eci || '',
+                                profileType: item?.attributes?.masterDocType?.value || '',
+                                legalEntityId: legalOwner[0]?.sapLeCode || '',
+                                legalEntity: legalOwner[0]?.name || '',
+                                status: 'LIVE',
+                                createdAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+                                updatedAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+                                createdBy: 'System',
+                                updatedBy: 'System'
+                            });
+                        }
+                    }
+                });
+            }
+        }
+        return inScopeMasterAgreementsList;
+    };
+
     processAndFlattenData = (data) => {
         if (objectExists(data, 'compositeProfile.legalAgreement.attributes.crossMarginEntities.value')) {
             const crossMarginEntities = data.compositeProfile.legalAgreement.attributes.crossMarginEntities.value;
