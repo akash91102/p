@@ -1,0 +1,714 @@
+{
+    "compositeProfile": {
+        "legalAgreement": {
+            "profileId": "30000000000001",
+            "lineOfBusiness": "XM",
+            "profileType": "CPMNA",
+            "profileStatus": "LIVE",
+            "createdBy": "System",
+            "createdDtm": null,
+            "updatedDtm": null,
+            "updatedBy": "O739026",
+            "version": 1,
+            "attributes": {
+                "parties": {
+                    "source": "USER",
+                    "sourceId": null,
+                    "value": [
+                        {
+                            "role": "COUNTERPARTY",
+                            "eci": "0220327418",
+                            "ucn": "005807862000",
+                            "spn": "7014279",
+                            "name": "CAPULA GLOBAL RELATIVE VALUE MASTER FUND LIMITED"
+                        }
+                    ]
+                },
+                "inScopeMasterAgreements": {
+                    "source": "USER",
+                    "value": [
+                        {
+                            "profileId": "11100001",
+                            "lineOfBusiness": "PFS",
+                            "attributes": {
+                                "parties": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": [
+                                        {
+                                            "role": "LEGAL_OWNER",
+                                            "eci": "0000795880",
+                                            "ucn": "000452698000",
+                                            "spn": "1043587",
+                                            "sapLeCode": "3371",
+                                            "name": "J.P. Morgan Securities LLC"
+                                        },
+                                        {
+                                            "role": "COUNTERPARTY",
+                                            "eci": "0220327418",
+                                            "ucn": "005807862000",
+                                            "spn": "7014279",
+                                            "name": "CAPULA GLOBAL RELATIVE VALUE MASTER FUND LIMITED"
+                                        }
+                                    ]
+                                },
+                                "masterAgreementNumber": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "10000000244028"
+                                },
+                                "masterDocType": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "IAA"
+                                }
+                            }
+                        },
+                        {
+                            "profileId": "11100001",
+                            "lineOfBusiness": "PFS",
+                            "attributes": {
+                                "parties": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": [
+                                        {
+                                            "role": "LEGAL_OWNER",
+                                            "eci": "0000803338",
+                                            "ucn": "000867689000",
+                                            "spn": "0023523",
+                                            "sapLeCode": "3308",
+                                            "name": "J.P. MORGAN SECURITIES PLC"
+                                        },
+                                        {
+                                            "role": "COUNTERPARTY",
+                                            "eci": "0220327418",
+                                            "ucn": "005807862000",
+                                            "spn": "7014279",
+                                            "name": "CAPULA GLOBAL RELATIVE VALUE MASTER FUND LIMITED"
+                                        }
+                                    ]
+                                },
+                                "masterAgreementNumber": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "10000000244029"
+                                },
+                                "masterDocType": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "IPBA"
+                                }
+                            }
+                        },
+                        {
+                            "profileId": "11100001",
+                            "lineOfBusiness": "FO",
+                            "attributes": {
+                                "parties": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": [
+                                        {
+                                            "role": "LEGAL_OWNER",
+                                            "eci": "0001318690",
+                                            "ucn": "006987275000",
+                                            "spn": "0020397",
+                                            "sapLeCode": "0802",
+                                            "name": "JPMORGAN CHASE BANK, NATIONAL ASSOCIATION"
+                                        },
+                                        {
+                                            "role": "COUNTERPARTY",
+                                            "eci": "0220327418",
+                                            "ucn": "005807862000",
+                                            "spn": "7014279",
+                                            "name": "CAPULA GLOBAL RELATIVE VALUE MASTER FUND LIMITED"
+                                        }
+                                    ]
+                                },
+
+                                "masterAgreementNumber": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "10000000244030"
+                                },
+                                "masterDocType": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "CLEARING"
+                                }
+                            }
+                        },
+                        {
+                            "profileId": "11100001",
+                            "lineOfBusiness": "FI_REPO",
+                            "attributes": {
+                                "parties": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": [
+                                        {
+                                            "role": "LEGAL_OWNER",
+                                            "eci": "0001318690",
+                                            "ucn": "006987275000",
+                                            "spn": "0020397",
+                                            "sapLeCode": "0802",
+                                            "name": "JPMORGAN CHASE BANK, NATIONAL ASSOCIATION"
+                                        },
+                                        {
+                                            "role": "COUNTERPARTY",
+                                            "eci": "0220327418",
+                                            "ucn": "005807862000",
+                                            "spn": "7014279",
+                                            "name": "CAPULA GLOBAL RELATIVE VALUE MASTER FUND LIMITED"
+                                        }
+                                    ]
+                                },
+
+                                "masterAgreementNumber": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "10000000244028"
+                                },
+                                "masterDocType": {
+                                    "source": "USER",
+                                    "sourceId": null,
+                                    "value": "GMRA"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "crossMarginCalcParam": {
+                    "source": "USER",
+                    "value": {
+                        "tier": "1",
+                        "tierVersion": "2025.3.1",
+                        "tierEffectiveDate": "2025-07-09",
+                        "addOn": [
+                            "Liquidity",
+                            "Tenor"
+                        ],
+                        "houseMultiplier": "1"
+                    }
+                },
+                "crossMarginEntitiesRules": {
+                    "source": "USER",
+                    "value": [
+                        {
+                            "lineOfBusiness": "PFS",
+                            "entityRules": [
+                                {
+                                    "ruleId": "EQUITY_PB_FAMILY",
+                                    "ruleDescription": "Include Equity PB Family",
+                                    "conditions": {
+                                        "@type": ".EqCondition",
+                                        "expr": [
+                                            {
+                                                "@type": ".operands.JsonPathOperand",
+                                                "id": {
+                                                    "@type": ".NamedID",
+                                                    "id": "famType"
+                                                },
+                                                "type": "JSONPATH",
+                                                "failMode": "FALSE"
+                                            },
+                                            {
+                                                "@type": ".operands.StringOperand",
+                                                "value": "PB_FAM"
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                },
+                                {
+                                    "ruleId": "EXCLUDE_FAMILY_OVERRIDE",
+                                    "ruleDescription": "Excluded Family Override",
+                                    "conditions": {
+                                        "@type": ".InCondition",
+                                        "operand": {
+                                            "@type": ".JsonPathOperand",
+                                            "id": {
+                                                "@type": ".NamedID",
+                                                "id": "family"
+                                            },
+                                            "type": "JSONPATH",
+                                            "failMode": "FALSE"
+                                        },
+                                        "membersType": "STRING",
+                                        "members": [
+                                            ""
+                                        ]
+                                    },
+                                    "action": "EXCLUDE",
+                                    "isEnabled": "YES"
+                                },
+                                {
+                                    "ruleId": "EXCLUDE_ACCOUNT_OVERRIDE",
+                                    "ruleDescription": "Excluded Account Override",
+                                    "conditions": {
+                                        "@type": ".InCondition",
+                                        "operand": {
+                                            "@type": ".JsonPathOperand",
+                                            "id": {
+                                                "@type": ".NamedID",
+                                                "id": "accountId"
+                                            },
+                                            "type": "JSONPATH",
+                                            "failMode": "FALSE"
+                                        },
+                                        "membersType": "STRING",
+                                        "members": [
+                                            "31202066"
+                                        ]
+                                    },
+                                    "action": "EXCLUDE",
+                                    "isEnabled": "YES"
+                                }
+                            ]
+                        },
+                        {
+                            "lineOfBusiness": "FO",
+                            "entityRules": [
+                                {
+                                    "ruleId": "ACCOUNT_MARGIN_FLAG_TRUE",
+                                    "ruleDescription": "Account Margin Flag",
+                                    "conditions": {
+                                        "@type": ".EqCondition",
+                                        "expr": [
+                                            {
+                                                "@type": ".operands.JsonPathOperand",
+                                                "id": {
+                                                    "@type": ".NamedID",
+                                                    "id": "marginFlag"
+                                                },
+                                                "type": "JSONPATH",
+                                                "failMode": "FALSE"
+                                            },
+                                            {
+                                                "@type": ".operands.StringOperand",
+                                                "value": "TRUE"
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                },
+                                {
+                                    "ruleId": "EXCLUDE_ACCOUNT_OVERRIDE",
+                                    "ruleDescription": "Excluded Account Override",
+                                    "conditions": {
+                                        "@type": ".InCondition",
+                                        "operand": {
+                                            "@type": ".JsonPathOperand",
+                                            "id": {
+                                                "@type": ".NamedID",
+                                                "id": "FO_ACCT_ID"
+                                            },
+                                            "type": "JSONPATH",
+                                            "failMode": "FALSE"
+                                        },
+                                        "membersType": "STRING",
+                                        "members": [
+                                            "42185"
+                                        ]
+                                    },
+                                    "action": "EXCLUDE",
+                                    "isEnabled": "YES"
+                                }
+                            ]
+                        },
+                        {
+                            "lineOfBusiness": "FI_REPO",
+                            "entityRules": [
+                                {
+                                    "ruleId": "ACCOUNT_SPN",
+                                    "ruleDescription": "Account SPN",
+                                    "conditions": {
+                                        "@type": ".EqCondition",
+                                        "expr": [
+                                            {
+                                                "@type": ".operands.JsonPathOperand",
+                                                "id": {
+                                                    "@type": ".NamedID",
+                                                    "id": "SPN"
+                                                },
+                                                "type": "JSONPATH",
+                                                "failMode": "FALSE"
+                                            },
+                                            {
+                                                "@type": ".operands.StringOperand",
+                                                "value": "7014279"
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                },
+                                {
+                                    "ruleId": "EXCLUDE_ACCOUNT_OVERRIDE",
+                                    "ruleDescription": "Excluded Account Override",
+                                    "conditions": {
+                                        "@type": ".InCondition",
+                                        "operand": {
+                                            "@type": ".JsonPathOperand",
+                                            "id": {
+                                                "@type": ".NamedID",
+                                                "id": "Account"
+                                            },
+                                            "type": "JSONPATH",
+                                            "failMode": "FALSE"
+                                        },
+                                        "membersType": "STRING",
+                                        "members": [
+                                            "A101278247"
+                                        ]
+                                    },
+                                    "action": "EXCLUDE",
+                                    "isEnabled": "YES"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "crossMarginProductsRules": {
+                    "source": "USER",
+                    "value": [
+                        {
+                            "lineOfBusiness": "PFS",
+                            "productRules": [
+                                {
+                                    "ruleId": "GOV_G10",
+                                    "ruleDescription": "Include Government Bond issued by G10",
+                                    "conditions": {
+                                        "@type": ".AndConnector",
+                                        "type": "AND",
+                                        "failMode": "FALSE",
+                                        "expr": [
+                                            {
+                                                "@type": ".operators.EqCondition",
+                                                "expr": [
+                                                    {
+                                                        "@type": ".operands.JsonPathOperand",
+                                                        "id": {
+                                                            "@type": ".NamedID",
+                                                            "id": "Instrument.productType"
+                                                        },
+                                                        "type": "JSONPATH",
+                                                        "failMode": "FALSE"
+                                                    },
+                                                    {
+                                                        "@type": ".operands.StringOperand",
+                                                        "value": "GOV"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "@type": ".operators.InCondition",
+                                                "operand": {
+                                                    "@type": ".JsonPathOperand",
+                                                    "id": {
+                                                        "@type": ".NamedID",
+                                                        "id": "Instrument.Issuer.country"
+                                                    },
+                                                    "type": "JSONPATH",
+                                                    "failMode": "FALSE"
+                                                },
+                                                "membersType": "STRING",
+                                                "members": [
+                                                    "Belgium",
+                                                    "Canada",
+                                                    "Germany",
+                                                    "France",
+                                                    "Italy",
+                                                    "Japan",
+                                                    "Netherlands",
+                                                    "Sweden",
+                                                    "Switzerland",
+                                                    "United Kingdom",
+                                                    "United States"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                }
+                            ]
+                        },
+                        {
+                            "lineOfBusiness": "FO",
+                            "productRules": [
+                                {
+                                    "ruleId": "IRS_G10",
+                                    "ruleDescription": "Include Interest Rate Swap for G10 currencies",
+                                    "conditions": {
+                                        "@type": ".AndConnector",
+                                        "type": "AND",
+                                        "failMode": "FALSE",
+                                        "expr": [
+                                            {
+                                                "@type": ".operators.EqCondition",
+                                                "expr": [
+                                                    {
+                                                        "@type": ".operands.JsonPathOperand",
+                                                        "id": {
+                                                            "@type": ".NamedID",
+                                                            "id": "DealId.productType"
+                                                        },
+                                                        "type": "JSONPATH",
+                                                        "failMode": "FALSE"
+                                                    },
+                                                    {
+                                                        "@type": ".operands.StringOperand",
+                                                        "value": "IRS"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "@type": ".operators.InCondition",
+                                                "operand": {
+                                                    "@type": ".JsonPathOperand",
+                                                    "id": {
+                                                        "@type": ".NamedID",
+                                                        "id": "DealId.currency"
+                                                    },
+                                                    "type": "JSONPATH",
+                                                    "failMode": "FALSE"
+                                                },
+                                                "membersType": "STRING",
+                                                "members": [
+                                                    "USD",
+                                                    "EUR",
+                                                    "JPY",
+                                                    "GBP",
+                                                    "CHF",
+                                                    "CAD",
+                                                    "SEK"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                },
+                                {
+                                    "ruleId": "BOF_GOV_G10",
+                                    "ruleDescription": "Include Government Bond Futures (from G10 Countries only)",
+                                    "conditions": {
+                                        "@type": ".AndConnector",
+                                        "type": "AND",
+                                        "failMode": "FALSE",
+                                        "expr": [
+                                            {
+                                                "@type": ".operators.EqCondition",
+                                                "expr": [
+                                                    {
+                                                        "@type": ".operands.JsonPathOperand",
+                                                        "id": {
+                                                            "@type": ".NamedID",
+                                                            "id": "Instrument.productType"
+                                                        },
+                                                        "type": "JSONPATH",
+                                                        "failMode": "FALSE"
+                                                    },
+                                                    {
+                                                        "@type": ".operands.StringOperand",
+                                                        "value": "BOF"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "@type": ".operators.EqCondition",
+                                                "expr": [
+                                                    {
+                                                        "@type": ".operands.JsonPathOperand",
+                                                        "id": {
+                                                            "@type": ".NamedID",
+                                                            "id": "Instrument.Underlier.productType"
+                                                        },
+                                                        "type": "JSONPATH",
+                                                        "failMode": "FALSE"
+                                                    },
+                                                    {
+                                                        "@type": ".operands.StringOperand",
+                                                        "value": "GOV"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "@type": ".operators.InCondition",
+                                                "operand": {
+                                                    "@type": ".JsonPathOperand",
+                                                    "id": {
+                                                        "@type": ".NamedID",
+                                                        "id": "Instrument.Issuer.country"
+                                                    },
+                                                    "type": "JSONPATH",
+                                                    "failMode": "FALSE"
+                                                },
+                                                "membersType": "STRING",
+                                                "members": [
+                                                    "Belgium",
+                                                    "Canada",
+                                                    "Germany",
+                                                    "France",
+                                                    "Italy",
+                                                    "Japan",
+                                                    "Netherlands",
+                                                    "Sweden",
+                                                    "Switzerland",
+                                                    "United Kingdom",
+                                                    "United States"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                },
+                                {
+                                    "ruleId": "BOND_G10",
+                                    "ruleDescription": "Include Bond issued by G10",
+                                    "conditions": {
+                                        "@type": ".AndConnector",
+                                        "type": "AND",
+                                        "failMode": "FALSE",
+                                        "expr": [
+                                            {
+                                                "@type": ".operators.EqCondition",
+                                                "expr": [
+                                                    {
+                                                        "@type": ".operands.JsonPathOperand",
+                                                        "id": {
+                                                            "@type": ".NamedID",
+                                                            "id": "Instrument.productType"
+                                                        },
+                                                        "type": "JSONPATH",
+                                                        "failMode": "FALSE"
+                                                    },
+                                                    {
+                                                        "@type": ".operands.StringOperand",
+                                                        "value": "BOND"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "@type": ".operators.InCondition",
+                                                "operand": {
+                                                    "@type": ".JsonPathOperand",
+                                                    "id": {
+                                                        "@type": ".NamedID",
+                                                        "id": "Instrument.Issuer.country"
+                                                    },
+                                                    "type": "JSONPATH",
+                                                    "failMode": "FALSE"
+                                                },
+                                                "membersType": "STRING",
+                                                "members": [
+                                                    "Belgium",
+                                                    "Canada",
+                                                    "Germany",
+                                                    "France",
+                                                    "Italy",
+                                                    "Japan",
+                                                    "Netherlands",
+                                                    "Sweden",
+                                                    "Switzerland",
+                                                    "United Kingdom",
+                                                    "United States"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                }
+                            ]
+                        },
+                        {
+                            "lineOfBusiness": "FI_REPO",
+                            "productRules": [
+                                {
+                                    "ruleId": "REPO_G10",
+                                    "ruleDescription": "Include REPO for goverment bonds issued by G10 countries",
+                                    "conditions": {
+                                        "@type": ".AndConnector",
+                                        "type": "AND",
+                                        "failMode": "FALSE",
+                                        "expr": [
+                                            {
+                                                "@type": ".operators.EqCondition",
+                                                "expr": [
+                                                    {
+                                                        "@type": ".operands.JsonPathOperand",
+                                                        "id": {
+                                                            "@type": ".NamedID",
+                                                            "id": "Instrument.productType"
+                                                        },
+                                                        "type": "JSONPATH",
+                                                        "failMode": "FALSE"
+                                                    },
+                                                    {
+                                                        "@type": ".operands.StringOperand",
+                                                        "value": "GOV"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "@type": ".operators.InCondition",
+                                                "operand": {
+                                                    "@type": ".JsonPathOperand",
+                                                    "id": {
+                                                        "@type": ".NamedID",
+                                                        "id": "Instrument.Issuer.country"
+                                                    },
+                                                    "type": "JSONPATH",
+                                                    "failMode": "FALSE"
+                                                },
+                                                "membersType": "STRING",
+                                                "members": [
+                                                    "Belgium",
+                                                    "Canada",
+                                                    "Germany",
+                                                    "France",
+                                                    "Italy",
+                                                    "Japan",
+                                                    "Netherlands",
+                                                    "Sweden",
+                                                    "Switzerland",
+                                                    "United Kingdom",
+                                                    "United States"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "action": "INCLUDE",
+                                    "isEnabled": "YES"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "linkedProfiles": {
+            "accounts": [],
+            "statements": [],
+            "settlementInstructions": [],
+            "consolidatedStatement": [],
+            "contacts": [],
+            "cassAccounts": [],
+            "nettingGroupProfiles": [],
+            "disputeProfiles": [],
+            "commitmentProfiles": [],
+            "requirementProfiles": [],
+            "contactProfiles": [],
+            "defaultProfiles": [],
+            "collateralMoveSimulationProfiles": []
+        },
+        "profileOverrides": null
+    }
+}
+
