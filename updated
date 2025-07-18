@@ -207,6 +207,13 @@ class XMProfileFields extends Component {
             this.props.onCustFormUpdate(formData);
         }
 
+        // Update state tracking
+        this.setState({
+            hasLocalChanges: true,
+            lastSavedData: [...agreementsArray],
+            lastUpdateTimestamp: Date.now()
+        });
+
         // Update grid after a short delay to ensure state is updated
         setTimeout(() => {
             if (this.gridApiRefs["masterAgreements"]) {
@@ -215,6 +222,44 @@ class XMProfileFields extends Component {
         }, 100);
 
         if (callback) callback();
+    };
+
+    // Method to reset preservation state (useful for debugging or manual resets)
+    resetPreservationState = () => {
+        const currentAgreements = this.getCurrentMasterAgreements();
+        this.setState({
+            hasLocalChanges: false,
+            lastSavedData: [...(Array.isArray(currentAgreements) ? currentAgreements : [])],
+            lastUpdateTimestamp: Date.now()
+        });
+        console.log('Preservation state reset');
+    };
+
+    // Debug method to check current preservation state (accessible from browser console)
+    debugPreservationState = () => {
+        const { hasLocalChanges, lastSavedData, isInitialized, lastUpdateTimestamp } = this.state;
+        const currentAgreements = this.getCurrentMasterAgreements();
+        const shouldPreserve = this.shouldPreserveLocalChanges();
+        
+        console.group('Preservation State Debug');
+        console.log('isInitialized:', isInitialized);
+        console.log('hasLocalChanges:', hasLocalChanges);
+        console.log('shouldPreserveLocalChanges():', shouldPreserve);
+        console.log('lastUpdateTimestamp:', lastUpdateTimestamp ? new Date(lastUpdateTimestamp).toISOString() : null);
+        console.log('currentAgreements length:', Array.isArray(currentAgreements) ? currentAgreements.length : 0);
+        console.log('lastSavedData length:', Array.isArray(lastSavedData) ? lastSavedData.length : 0);
+        console.log('Data differs:', JSON.stringify(currentAgreements) !== JSON.stringify(lastSavedData));
+        console.groupEnd();
+        
+        return {
+            isInitialized,
+            hasLocalChanges,
+            shouldPreserve,
+            lastUpdateTimestamp,
+            currentAgreementsCount: Array.isArray(currentAgreements) ? currentAgreements.length : 0,
+            lastSavedDataCount: Array.isArray(lastSavedData) ? lastSavedData.length : 0,
+            dataDiffers: JSON.stringify(currentAgreements) !== JSON.stringify(lastSavedData)
+        };
     };
 
     editSelectedMasterAgreement = () => {
@@ -347,9 +392,7 @@ class XMProfileFields extends Component {
                             this.updateMasterAgreements(updatedAgreements, () => {
                                 this.setState({ 
                                     resetTable: false, 
-                                    selectedRows: [],
-                                    hasLocalChanges: true,
-                                    lastSavedData: [...updatedAgreements]
+                                    selectedRows: []
                                 });
                                 this.rebuildCrossMarginEntities(updatedAgreements);
                             });
@@ -597,28 +640,42 @@ class XMProfileFields extends Component {
         });
     }
 
+    componentWillUnmount() {
+        if (this.shouldPreserveLocalChanges()) {
+            console.warn('Component unmounting with unsaved changes. Local changes may be lost.');
+        }
+    }
+
     // Re-enabled and enhanced componentDidUpdate
     componentDidUpdate(prevProps) {
         // Only process if we have new data from props and it's different from previous
         if (prevProps.data !== this.props.data && this.props.data) {
-            const newMasterAgreements = this.getCurrentMasterAgreements();
-            const validNewAgreements = Array.isArray(newMasterAgreements) ? newMasterAgreements : [];
+            // Check if we should preserve local changes
+            const shouldPreserve = this.shouldPreserveLocalChanges();
+            
+            if (!shouldPreserve) {
+                const newMasterAgreements = this.getCurrentMasterAgreements();
+                const validNewAgreements = Array.isArray(newMasterAgreements) ? newMasterAgreements : [];
 
-            // Update grid if the data has actually changed
-            if (this.gridApiRefs["masterAgreements"]) {
-                const currentGridData = [];
-                this.gridApiRefs["masterAgreements"].forEachNode(node => {
-                    currentGridData.push(node.data);
-                });
+                // Update grid if the data has actually changed
+                if (this.gridApiRefs["masterAgreements"]) {
+                    const currentGridData = [];
+                    this.gridApiRefs["masterAgreements"].forEachNode(node => {
+                        currentGridData.push(node.data);
+                    });
 
-                // Only update grid if data is different
-                if (JSON.stringify(validNewAgreements) !== JSON.stringify(currentGridData)) {
-                    this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
+                    // Only update grid if data is different
+                    if (JSON.stringify(validNewAgreements) !== JSON.stringify(currentGridData)) {
+                        this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
+                    }
                 }
-            }
 
-            // Clear selected rows when data changes from external source
-            this.setState({ selectedRows: [] });
+                // Clear selected rows when data changes from external source
+                this.setState({ selectedRows: [] });
+            } else {
+                // Log that we're preserving local changes
+                console.log('Preserving local changes, skipping props update');
+            }
         }
     }
 
@@ -630,9 +687,14 @@ class XMProfileFields extends Component {
         const existingMasterAgreements = this.getCurrentMasterAgreements();
         const hasExistingMasterAgreements = Array.isArray(existingMasterAgreements) && existingMasterAgreements.length > 0;
         
-        // Only process inScope data if no masterAgreements exist yet
-        if (!hasExistingMasterAgreements) {
+        // Check if we should preserve local changes
+        const shouldPreserve = this.shouldPreserveLocalChanges();
+        
+        // Only process inScope data if no masterAgreements exist yet AND we're not preserving local changes
+        if (!hasExistingMasterAgreements && !shouldPreserve) {
             this.handleOnInsertInScopeMasterAgreementsList(cloneData);
+        } else if (shouldPreserve) {
+            console.log('Preserving local changes in setup, skipping inScope processing');
         }
         
         this.handleOnInsertInECPAndSPN(cloneData);
@@ -849,12 +911,19 @@ class XMProfileFields extends Component {
         });
     };
 
-    // New method to check if data needs to be preserved
+    // Enhanced method to check if data needs to be preserved
     shouldPreserveLocalChanges = () => {
-        const currentAgreements = this.getCurrentMasterAgreements();
-        const { lastSavedData } = this.state;
+        const { hasLocalChanges, lastSavedData, isInitialized } = this.state;
         
-        if (!lastSavedData) return false;
+        if (!isInitialized) return false;
+        
+        if (hasLocalChanges) return true;
+        
+        const currentAgreements = this.getCurrentMasterAgreements();
+        
+        if (!lastSavedData) {
+            return Array.isArray(currentAgreements) && currentAgreements.length > 0;
+        }
         
         return JSON.stringify(currentAgreements) !== JSON.stringify(lastSavedData);
     };
