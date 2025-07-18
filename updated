@@ -57,6 +57,7 @@ class XMProfileFields extends Component {
             toggleState: true,
             ready: true,
             selectedRows: [],
+            masterAgreements: [], // Add this to track master agreements in state
             modal: {
                 disabled: null,
                 show: false,
@@ -69,15 +70,6 @@ class XMProfileFields extends Component {
                 resetIfSelected: [{ field: "frequency", value: "*" }],
                 resetExclude: ["frequency"],
             },
-            hasLocalChanges: false,
-            lastSavedData: null,
-            isInitialized: false,
-            lastUpdateTimestamp: null,
-            preservationState: {
-                hasUserModifications: false,
-                lastDataHash: null,
-                preserveChanges: false
-            }
         };
 
         this.bindedEvents = {
@@ -162,62 +154,6 @@ class XMProfileFields extends Component {
         return [];
     };
 
-    hasUserModifiedMasterAgreements = () => {
-        const data = this.props.data || {};
-        const masterAgreementsPath = 'compositeProfile.legalAgreement.attributes.masterAgreements';
-        const masterAgreementsObj = traverseObjectAndReturn({obj: data, string: masterAgreementsPath});
-        
-        // Check if masterAgreements exists and has USER source
-        return masterAgreementsObj && 
-               masterAgreementsObj.source === 'USER' && 
-               Array.isArray(masterAgreementsObj.value) && 
-               masterAgreementsObj.value.length > 0;
-    };
-
-    // NEW: Calculate data hash for change detection
-    calculateDataHash = (data) => {
-        if (!data || !Array.isArray(data)) return '';
-        return JSON.stringify(data.map(item => ({
-            agreementId: item.agreementId,
-            lineOfBusiness: item.lineOfBusiness,
-            legalEntityId: item.legalEntityId,
-            updatedAt: item.updatedAt
-        })));
-    };
-
-    // NEW: Enhanced preservation check
-    shouldPreserveLocalChanges = () => {
-        const { hasLocalChanges, lastSavedData, isInitialized, preservationState } = this.state;
-        
-        if (!isInitialized) return false;
-        
-        // Primary check: If marked as having user modifications in data structure
-        if (this.hasUserModifiedMasterAgreements()) {
-            return true;
-        }
-        
-        // Secondary check: State-based preservation (component lifecycle)
-        if (preservationState.preserveChanges || hasLocalChanges) {
-            return true;
-        }
-        
-        const currentAgreements = this.getCurrentMasterAgreements();
-        const currentHash = this.calculateDataHash(currentAgreements);
-        
-        // Check if data has changed from initial state
-        if (preservationState.lastDataHash && currentHash !== preservationState.lastDataHash) {
-            return true;
-        }
-        
-        // Check against last saved data
-        if (lastSavedData) {
-            const lastSavedHash = this.calculateDataHash(lastSavedData);
-            return currentHash !== lastSavedHash;
-        }
-        
-        return Array.isArray(currentAgreements) && currentAgreements.length > 0;
-    };
-
     updateMasterAgreements = (newAgreements, callback = null) => {
         const agreementsArray = Array.isArray(newAgreements) ? newAgreements : [];
 
@@ -226,14 +162,27 @@ class XMProfileFields extends Component {
 
         const prop = 'compositeProfile.legalAgreement.attributes.masterAgreements';
 
-        // Ensure the masterAgreements structure exists
-        let masterAgreementsObj = {
-            source: 'USER',
-            sourceId: this.props.userInfo?.username || 'system',
-            value: [...agreementsArray]
-        };
+        if (traverseObjectAndReturn({obj: formData, string: prop}) === null) {
+            traverseObject({obj: formData, string: prop, insertAtEnd: {
+                source: 'USER',
+                sourceId: this.props.userInfo?.username || 'system',
+                value: []
+            }});
+        }
 
-        // Insert/update the master agreements with proper USER marking
+        let masterAgreementsObj = traverseObjectAndReturn({obj: formData, string: prop});
+        if (!masterAgreementsObj) {
+            masterAgreementsObj = {
+                source: 'USER',
+                sourceId: this.props.userInfo?.username || 'system',
+                value: []
+            };
+        }
+
+        masterAgreementsObj.value = [...agreementsArray];
+        masterAgreementsObj.source = 'USER';
+        masterAgreementsObj.sourceId = this.props.userInfo?.username || 'system';
+
         traverseObjectAndInsert({
             obj: formData,
             string: prop,
@@ -241,40 +190,13 @@ class XMProfileFields extends Component {
             newValues: masterAgreementsObj
         });
 
-        // Mark inScopeMasterAgreements as processed to prevent re-processing
-        const inScopePath = 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements';
-        const inScopeObj = traverseObjectAndReturn({obj: formData, string: inScopePath});
-        if (inScopeObj) {
-            inScopeObj.processed = true;
-            inScopeObj.source = 'SYSTEM';
-            inScopeObj.userModified = true; // NEW: Additional flag
-        }
-
-        // Update parent component immediately
         if (this.props.onCustFormUpdate) {
             this.props.onCustFormUpdate(formData);
         }
 
-        // NEW: Enhanced state tracking
-        const dataHash = this.calculateDataHash(agreementsArray);
-        this.setState({
-            hasLocalChanges: true,
-            lastSavedData: [...agreementsArray],
-            lastUpdateTimestamp: Date.now(),
-            preservationState: {
-                ...this.state.preservationState,
-                hasUserModifications: true,
-                lastDataHash: dataHash,
-                preserveChanges: true
-            }
-        });
-
-        // Update grid
-        setTimeout(() => {
-            if (this.gridApiRefs["masterAgreements"]) {
-                this.gridApiRefs["masterAgreements"].setRowData([...agreementsArray]);
-            }
-        }, 100);
+        if (this.gridApiRefs["masterAgreements"]) {
+            this.gridApiRefs["masterAgreements"].setRowData([...agreementsArray]);
+        }
 
         if (callback) callback();
     };
@@ -404,11 +326,7 @@ class XMProfileFields extends Component {
                             this.toggleModal({ state: false });
 
                             this.updateMasterAgreements(updatedAgreements, () => {
-                                this.setState({ 
-                                    resetTable: false, 
-                                    selectedRows: []
-                                });
-                                this.rebuildCrossMarginEntities(updatedAgreements);
+                                this.setState({ resetTable: false, selectedRows: [] });
                             });
                         } else {
                             this.setState({ resetTable: false });
@@ -457,114 +375,6 @@ class XMProfileFields extends Component {
         }
 
         return populatedFormData;
-    };
-
-    rebuildCrossMarginEntities = (masterAgreements) => {
-
-        let formData = cloneObject(this.props.data || {});
-        const crossMarginEntitiesPath = 'compositeProfile.legalAgreement.attributes.crossMarginEntities';
-
-        let crossMarginEntities = traverseObjectAndReturn({obj: formData, string: crossMarginEntitiesPath});
-        if (!crossMarginEntities) {
-            crossMarginEntities = {
-                source: 'USER',
-                sourceId: this.props.userInfo?.username || 'system',
-                value: []
-            };
-        }
-
-        const validAgreements = Array.isArray(masterAgreements) ? masterAgreements : [];
-
-        if (validAgreements.length === 0) {
-            crossMarginEntities.value = [];
-        } else {
-            const groupedAgreements = {};
-            validAgreements.forEach(agreement => {
-                const entityKey = `${agreement.eci || 'unknown'}_${agreement.legalEntityId || 'unknown'}`;
-                if (!groupedAgreements[entityKey]) {
-                    groupedAgreements[entityKey] = {
-                        eci: agreement.eci || '',
-                        legalEntityId: agreement.legalEntityId || '',
-                        legalEntity: agreement.legalEntity || '',
-                        ucn: agreement.ucn || '',
-                        spn: agreement.spn || '',
-                        agreements: {}
-                    };
-                }
-
-                const lobKey = agreement.lineOfBusiness || 'UNKNOWN';
-                if (!groupedAgreements[entityKey].agreements[lobKey]) {
-                    groupedAgreements[entityKey].agreements[lobKey] = [];
-                }
-
-                groupedAgreements[entityKey].agreements[lobKey].push({
-                    profileId: agreement.agreementId,
-                    lineOfBusiness: agreement.lineOfBusiness,
-                    profileType: agreement.profileType,
-                    profileStatus: agreement.status,
-                    version: agreement.version || 1,
-                    createdBy: agreement.createdBy,
-                    updatedBy: agreement.updatedBy,
-                    createdDtm: agreement.createdAt,
-                    updatedDtm: agreement.updatedAt,
-                    attributes: null,
-                    approvedDtm: null,
-                    approvedBy: null,
-                    comments: null,
-                    activationDtm: null
-                });
-            });
-
-            crossMarginEntities.value = Object.values(groupedAgreements).map(group => ({
-                counterParty: {
-                    role: "COUNTERPARTY",
-                    eci: group.eci,
-                    ucn: group.ucn,
-                    spn: group.spn,
-                    name: group.legalEntity,
-                    lei: null,
-                    sapLeCode: null,
-                    principalLei: null,
-                    principalEci: null,
-                    cbd: null,
-                    leCode: null,
-                    goldenEntityEci: null,
-                    goldenEntityName: null
-                },
-                legalEntities: [{
-                    legalEntity: {
-                        role: "LEGAL_OWNER",
-                        eci: group.eci,
-                        ucn: group.ucn,
-                        spn: group.spn,
-                        name: group.legalEntity,
-                        lei: null,
-                        sapLeCode: null,
-                        principalLei: null,
-                        principalEci: null,
-                        cbd: null,
-                        leCode: null,
-                        goldenEntityEci: null,
-                        goldenEntityName: null
-                    },
-                    legalAgreementProfiles: group.agreements
-                }]
-            }));
-        }
-
-        crossMarginEntities.source = 'USER';
-        crossMarginEntities.sourceId = this.props.userInfo?.username || 'system';
-
-        traverseObjectAndInsert({
-            obj: formData,
-            string: crossMarginEntitiesPath,
-            bindOn: 'crossMarginEntities',
-            newValues: crossMarginEntities
-        });
-
-        if (this.props.onCustFormUpdate) {
-            this.props.onCustFormUpdate(formData);
-        }
     };
 
     handleMasterAgreementUpdate = (agreementData) => {
@@ -646,56 +456,28 @@ class XMProfileFields extends Component {
             this.setup(fallbackConfig);
         }
 
-        // NEW: Enhanced initialization state tracking
-        const hasUserModifications = this.hasUserModifiedMasterAgreements();
-        const currentAgreements = this.getCurrentMasterAgreements();
-        const dataHash = this.calculateDataHash(currentAgreements);
-        
         this.setState({
-            hasLocalChanges: hasUserModifications,
-            lastSavedData: hasUserModifications ? [...currentAgreements] : null,
-            lastUpdateTimestamp: hasUserModifications ? Date.now() : null,
-            isInitialized: true,
-            preservationState: {
-                hasUserModifications,
-                lastDataHash: dataHash,
-                preserveChanges: hasUserModifications
-            }
+            hasLocalChanges: false,
+            lastUpdateTimestamp: null
         });
     }
 
-    componentWillUnmount() {
-        if (this.shouldPreserveLocalChanges()) {
-            console.warn('Component unmounting with unsaved changes. Data has been persisted to parent component.');
-        }
-    }
-
+    // Fixed componentDidUpdate - uncommented and properly implemented
     componentDidUpdate(prevProps) {
         if (prevProps.data !== this.props.data && this.props.data) {
-            // NEW: Enhanced update logic with better preservation checks
-            const shouldPreserve = this.shouldPreserveLocalChanges();
-            
-            if (!shouldPreserve) {
-                const newMasterAgreements = this.getCurrentMasterAgreements();
-                const validNewAgreements = Array.isArray(newMasterAgreements) ? newMasterAgreements : [];
+            const newMasterAgreements = this.getCurrentMasterAgreements();
+            const validNewAgreements = Array.isArray(newMasterAgreements) ? newMasterAgreements : [];
+
+            const currentStateAgreements = Array.isArray(this.state.masterAgreements) ? this.state.masterAgreements : [];
+
+            if (JSON.stringify(validNewAgreements) !== JSON.stringify(currentStateAgreements)) {
+                this.setState({
+                    masterAgreements: [...validNewAgreements],
+                    hasLocalChanges: false
+                });
 
                 if (this.gridApiRefs["masterAgreements"]) {
-                    const currentGridData = [];
-                    this.gridApiRefs["masterAgreements"].forEachNode(node => {
-                        currentGridData.push(node.data);
-                    });
-
-                    if (JSON.stringify(validNewAgreements) !== JSON.stringify(currentGridData)) {
-                        this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
-                    }
-                }
-
-                this.setState({ selectedRows: [] });
-            } else {
-                // NEW: When preserving, ensure grid shows current agreements
-                const currentAgreements = this.getCurrentMasterAgreements();
-                if (this.gridApiRefs["masterAgreements"] && Array.isArray(currentAgreements)) {
-                    this.gridApiRefs["masterAgreements"].setRowData([...currentAgreements]);
+                    this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
                 }
             }
         }
@@ -703,29 +485,14 @@ class XMProfileFields extends Component {
 
     setup = (config) => {
         let cloneData = cloneObject(this.props.data || {});
+        this.initializeProfileData(cloneData);
         
-        // NEW: Enhanced preservation logic
-        const hasUserModifications = this.hasUserModifiedMasterAgreements();
-        const existingMasterAgreements = this.getCurrentMasterAgreements();
-        const hasExistingMasterAgreements = Array.isArray(existingMasterAgreements) && existingMasterAgreements.length > 0;
-        const shouldPreserve = this.shouldPreserveLocalChanges();
-        
-        // Check if inScope data was already processed
-        const inScopeObj = cloneData.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements;
-        const inScopeAlreadyProcessed = inScopeObj && (inScopeObj.processed || inScopeObj.userModified);
-        
-        // Only process inScope data if:
-        // 1. No existing master agreements AND
-        // 2. No user modifications AND  
-        // 3. Not preserving local changes AND
-        // 4. InScope data hasn't been processed already
-        if (!hasExistingMasterAgreements && 
-            !hasUserModifications && 
-            !shouldPreserve && 
-            !inScopeAlreadyProcessed) {
+        // Process inScope master agreements if they exist
+        if (objectExists(cloneData, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
             this.handleOnInsertInScopeMasterAgreementsList(cloneData);
         }
         
+        // Process parties data for ECI and SPN
         this.handleOnInsertInECPAndSPN(cloneData);
 
         let configSetupVar = configSetup({
@@ -745,9 +512,11 @@ class XMProfileFields extends Component {
     handleOnInsertInECPAndSPN = (data) => {
         if (objectExists(data, 'compositeProfile.legalAgreement.attributes.parties.value')) {
             const partiesObj = data.compositeProfile.legalAgreement.attributes.parties.value;
-            this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.eci', 'eci', partiesObj[0]?.eci);
-            this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.counterparty', 'counterparty', partiesObj[0]?.name);
-            this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.spn', 'spn', partiesObj[0]?.spn);
+            if (partiesObj && partiesObj.length > 0) {
+                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.eci', 'eci', partiesObj[0]?.eci);
+                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.counterparty', 'counterparty', partiesObj[0]?.name);
+                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.spn', 'spn', partiesObj[0]?.spn);
+            }
         }
     };
 
@@ -757,42 +526,12 @@ class XMProfileFields extends Component {
             string: attribute,
             bindOn: bindOn,
             newValues: value
-        })
-    }
-
-    processAndFlattenData = (data) => {
-        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.crossMarginEntities.value')) {
-            const crossMarginEntities = data.compositeProfile.legalAgreement.attributes.crossMarginEntities.value;
-            if (crossMarginEntities.length > 0) {
-                const firstEntity = crossMarginEntities[0];
-                const flattenedAgreements = this.processLegalAgreementProfiles(data);
-                traverseObjectAndInsert({
-                    obj: data,
-                    string: 'compositeProfile.legalAgreement.attributes.masterAgreements',
-                    bindOn: 'masterAgreements',
-                    newValues: {
-                        source: 'USER',
-                        sourceId: this.props.userInfo?.username || 'system',
-                        value: flattenedAgreements
-                    }
-                });
-            }
-        }
+        });
     };
 
-    // NEW: Enhanced inScope processing with better preservation tracking
     handleOnInsertInScopeMasterAgreementsList = (data) => {
         if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
-            const inScopeObj = data.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements;
-            
-            // Enhanced check for processed state
-            if (inScopeObj && (inScopeObj.processed || inScopeObj.userModified)) {
-                console.log('InScope master agreements already processed, skipping...');
-                return;
-            }
-            
-            const flattenedData = this.handleOnScopeMasterAgreementsFlattenData(data);
-            
+            const flattenedAgreements = this.handleOnScopeMasterAgreementsFlattenData(data);
             traverseObjectAndInsert({
                 obj: data,
                 string: 'compositeProfile.legalAgreement.attributes.masterAgreements',
@@ -800,18 +539,14 @@ class XMProfileFields extends Component {
                 newValues: {
                     source: 'USER',
                     sourceId: this.props.userInfo?.username || 'system',
-                    value: flattenedData
+                    value: flattenedAgreements
                 }
             });
             
-            // Mark as processed to prevent future re-processing
-            if (inScopeObj) {
-                inScopeObj.processed = true;
-                inScopeObj.processedAt = moment().format("YYYY-MM-DD HH:mm:ss.SSS");
-                inScopeObj.processedBy = this.props.userInfo?.username || 'system';
-            }
-            
-            console.log('InScope master agreements processed and flattened:', flattenedData.length, 'agreements');
+            // Update state with the flattened agreements
+            this.setState({
+                masterAgreements: flattenedAgreements
+            });
         }
     };
 
@@ -819,23 +554,26 @@ class XMProfileFields extends Component {
         let inScopeMasterAgreementsList = [];
         if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
             const inScopeMasterAgreeValue = data.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements?.value;
-            if(inScopeMasterAgreeValue.length > 0){
-                inScopeMasterAgreeValue.flatMap(item => {
-                    const legalOwner = item?.attributes?.parties?.value.filter(v => v.role === "LEGAL_OWNER");
-                    inScopeMasterAgreementsList.push({
-                        lineOfBusiness: item?.lineOfBusiness,
-                        agreementId: item?.attributes?.masterAgreementNumber?.value,
-                        eci: legalOwner[0]?.eci,
-                        profileType: item?.attributes?.masterDocType?.value,
-                        legalEntityId:legalOwner[0]?.sapLeCode,
-                        legalEntity: legalOwner[0]?.name,
-                        // NEW: Add metadata for tracking
-                        createdAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
-                        updatedAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
-                        createdBy: 'SYSTEM_INSCOPE_CONVERSION',
-                        updatedBy: 'SYSTEM_INSCOPE_CONVERSION',
-                        status: 'LIVE'
-                    });
+            if (inScopeMasterAgreeValue && inScopeMasterAgreeValue.length > 0) {
+                inScopeMasterAgreeValue.forEach(item => {
+                    if (item?.attributes?.parties?.value) {
+                        const legalOwner = item.attributes.parties.value.filter(v => v.role === "LEGAL_OWNER");
+                        if (legalOwner && legalOwner.length > 0) {
+                            inScopeMasterAgreementsList.push({
+                                lineOfBusiness: item?.lineOfBusiness || '',
+                                agreementId: item?.attributes?.masterAgreementNumber?.value || '',
+                                eci: legalOwner[0]?.eci || '',
+                                profileType: item?.attributes?.masterDocType?.value || '',
+                                legalEntityId: legalOwner[0]?.sapLeCode || '',
+                                legalEntity: legalOwner[0]?.name || '',
+                                status: 'LIVE',
+                                createdAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+                                updatedAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+                                createdBy: 'System',
+                                updatedBy: 'System'
+                            });
+                        }
+                    }
                 });
             }
         }
@@ -946,11 +684,9 @@ class XMProfileFields extends Component {
 
         this.updateMasterAgreements(updatedAgreements, () => {
             this.setState({ selectedRows: [] });
-            this.rebuildCrossMarginEntities(updatedAgreements);
         });
     };
 
-    // New validation methods for SPN and ECID in agreement form
     validateSpnOnBlur = async () => {
         let clone = cloneObject(this.state.config);
         let hasFieldChanges = false;
@@ -1323,30 +1059,17 @@ class XMProfileFields extends Component {
 
         this.initializeProfileData(completeFormData);
 
-        if (hasStructuralChanges && sectionRefKey !== 'crossMarginEntities') {
-            const currentAgreements = this.getCurrentMasterAgreements();
-            if (Array.isArray(currentAgreements) && currentAgreements.length > 0) {
-                this.rebuildCrossMarginEntities(currentAgreements);
-            }
-        }
-
         if (this.props.onCustFormUpdate) {
             this.props.onCustFormUpdate(completeFormData);
         }
 
-        // NEW: Enhanced state tracking on form updates
         this.setState({
             hasLocalChanges: true,
-            lastUpdateTimestamp: Date.now(),
-            preservationState: {
-                ...this.state.preservationState,
-                preserveChanges: true
-            }
+            lastUpdateTimestamp: Date.now()
         });
     };
 
     isStructuralField = (fieldBinding) => {
-
         const structuralFields = [
             'compositeProfile.legalAgreement.attributes.eci',
             'compositeProfile.legalAgreement.attributes.spn',
@@ -1460,11 +1183,9 @@ class XMProfileFields extends Component {
                                         <FormBuilder
                                             data={data}
                                             onFormUpdate={(updatedData) => {
-
                                                 if (onFormUpdate) {
                                                     onFormUpdate(updatedData);
                                                 }
-
                                                 this.handleFormDataUpdate(updatedData, refKey);
                                             }}
                                             bindedEvents={{
@@ -1572,52 +1293,6 @@ class XMProfileFields extends Component {
             </div>
         );
     }
-
-    processLegalAgreementProfiles = (data) => {
-        let legalAgreementProfiles = [];
-        const crossMarginEntities = data?.compositeProfile?.legalAgreement?.attributes?.crossMarginEntities?.value;
-
-        if (Array.isArray(crossMarginEntities) && crossMarginEntities.length > 0) {
-            crossMarginEntities.forEach((entityItem) => {
-                const legalEntities = entityItem?.legalEntities;
-                if (Array.isArray(legalEntities) && legalEntities.length > 0) {
-                    legalEntities.forEach((entity) => {
-                        const profilesObj = entity?.legalAgreementProfiles;
-                        const legalEntity = entity?.legalEntity;
-
-                        if (profilesObj && typeof profilesObj === 'object') {
-                            Object.keys(profilesObj).forEach(agreementType => {
-                                const profiles = profilesObj[agreementType];
-                                if (Array.isArray(profiles)) {
-                                    profiles.forEach((profile) => {
-                                        legalAgreementProfiles.push({
-                                            agreementId: profile.profileId,
-                                            lineOfBusiness: profile.lineOfBusiness,
-                                            agreementCategory: agreementType,
-                                            profileType: profile.profileType,
-                                            legalEntityId: legalEntity?.ucn || '',
-                                            legalEntity: legalEntity?.name || profile.lineOfBusiness,
-                                            status: profile.profileStatus,
-                                            updatedBy: profile.updatedBy,
-                                            updatedAt: profile.updatedDtm,
-                                            createdBy: profile.createdBy,
-                                            createdAt: profile.createdDtm,
-                                            version: profile.version,
-                                            eci: legalEntity?.eci || '',
-                                            _originalData: profile,
-                                            _agreementType: agreementType
-                                        });
-                                    });
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-        }
-
-        return legalAgreementProfiles;
-    };
 }
 
 const mapStateToProps = (state) => {
