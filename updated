@@ -72,7 +72,12 @@ class XMProfileFields extends Component {
             hasLocalChanges: false,
             lastSavedData: null,
             isInitialized: false,
-            lastUpdateTimestamp: null
+            lastUpdateTimestamp: null,
+            preservationState: {
+                hasUserModifications: false,
+                lastDataHash: null,
+                preserveChanges: false
+            }
         };
 
         this.bindedEvents = {
@@ -169,6 +174,50 @@ class XMProfileFields extends Component {
                masterAgreementsObj.value.length > 0;
     };
 
+    // NEW: Calculate data hash for change detection
+    calculateDataHash = (data) => {
+        if (!data || !Array.isArray(data)) return '';
+        return JSON.stringify(data.map(item => ({
+            agreementId: item.agreementId,
+            lineOfBusiness: item.lineOfBusiness,
+            legalEntityId: item.legalEntityId,
+            updatedAt: item.updatedAt
+        })));
+    };
+
+    // NEW: Enhanced preservation check
+    shouldPreserveLocalChanges = () => {
+        const { hasLocalChanges, lastSavedData, isInitialized, preservationState } = this.state;
+        
+        if (!isInitialized) return false;
+        
+        // Primary check: If marked as having user modifications in data structure
+        if (this.hasUserModifiedMasterAgreements()) {
+            return true;
+        }
+        
+        // Secondary check: State-based preservation (component lifecycle)
+        if (preservationState.preserveChanges || hasLocalChanges) {
+            return true;
+        }
+        
+        const currentAgreements = this.getCurrentMasterAgreements();
+        const currentHash = this.calculateDataHash(currentAgreements);
+        
+        // Check if data has changed from initial state
+        if (preservationState.lastDataHash && currentHash !== preservationState.lastDataHash) {
+            return true;
+        }
+        
+        // Check against last saved data
+        if (lastSavedData) {
+            const lastSavedHash = this.calculateDataHash(lastSavedData);
+            return currentHash !== lastSavedHash;
+        }
+        
+        return Array.isArray(currentAgreements) && currentAgreements.length > 0;
+    };
+
     updateMasterAgreements = (newAgreements, callback = null) => {
         const agreementsArray = Array.isArray(newAgreements) ? newAgreements : [];
 
@@ -192,15 +241,13 @@ class XMProfileFields extends Component {
             newValues: masterAgreementsObj
         });
 
-        // Also remove inScopeMasterAgreements to avoid conflicts on remount
+        // Mark inScopeMasterAgreements as processed to prevent re-processing
         const inScopePath = 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements';
         const inScopeObj = traverseObjectAndReturn({obj: formData, string: inScopePath});
         if (inScopeObj) {
-            // Mark as processed to avoid re-processing
-            if (typeof inScopeObj === 'object' && inScopeObj.value) {
-                inScopeObj.processed = true;
-                inScopeObj.source = 'SYSTEM';
-            }
+            inScopeObj.processed = true;
+            inScopeObj.source = 'SYSTEM';
+            inScopeObj.userModified = true; // NEW: Additional flag
         }
 
         // Update parent component immediately
@@ -208,11 +255,18 @@ class XMProfileFields extends Component {
             this.props.onCustFormUpdate(formData);
         }
 
-        // Update local state tracking
+        // NEW: Enhanced state tracking
+        const dataHash = this.calculateDataHash(agreementsArray);
         this.setState({
             hasLocalChanges: true,
             lastSavedData: [...agreementsArray],
-            lastUpdateTimestamp: Date.now()
+            lastUpdateTimestamp: Date.now(),
+            preservationState: {
+                ...this.state.preservationState,
+                hasUserModifications: true,
+                lastDataHash: dataHash,
+                preserveChanges: true
+            }
         });
 
         // Update grid
@@ -288,8 +342,6 @@ class XMProfileFields extends Component {
                             this.setState({ resetTable: false });
                             return;
                         }
-
-                        // Removed API validation call as requested
 
                         let exists = false;
                         const currentAgreements = this.getCurrentMasterAgreements();
@@ -594,15 +646,21 @@ class XMProfileFields extends Component {
             this.setup(fallbackConfig);
         }
 
-        // Initialize state tracking
+        // NEW: Enhanced initialization state tracking
         const hasUserModifications = this.hasUserModifiedMasterAgreements();
         const currentAgreements = this.getCurrentMasterAgreements();
+        const dataHash = this.calculateDataHash(currentAgreements);
         
         this.setState({
             hasLocalChanges: hasUserModifications,
             lastSavedData: hasUserModifications ? [...currentAgreements] : null,
             lastUpdateTimestamp: hasUserModifications ? Date.now() : null,
-            isInitialized: true
+            isInitialized: true,
+            preservationState: {
+                hasUserModifications,
+                lastDataHash: dataHash,
+                preserveChanges: hasUserModifications
+            }
         });
     }
 
@@ -614,7 +672,7 @@ class XMProfileFields extends Component {
 
     componentDidUpdate(prevProps) {
         if (prevProps.data !== this.props.data && this.props.data) {
-            // Only update grid if we're not preserving local changes
+            // NEW: Enhanced update logic with better preservation checks
             const shouldPreserve = this.shouldPreserveLocalChanges();
             
             if (!shouldPreserve) {
@@ -633,6 +691,12 @@ class XMProfileFields extends Component {
                 }
 
                 this.setState({ selectedRows: [] });
+            } else {
+                // NEW: When preserving, ensure grid shows current agreements
+                const currentAgreements = this.getCurrentMasterAgreements();
+                if (this.gridApiRefs["masterAgreements"] && Array.isArray(currentAgreements)) {
+                    this.gridApiRefs["masterAgreements"].setRowData([...currentAgreements]);
+                }
             }
         }
     }
@@ -640,18 +704,25 @@ class XMProfileFields extends Component {
     setup = (config) => {
         let cloneData = cloneObject(this.props.data || {});
         
-        // Check if user has already modified master agreements
+        // NEW: Enhanced preservation logic
         const hasUserModifications = this.hasUserModifiedMasterAgreements();
         const existingMasterAgreements = this.getCurrentMasterAgreements();
         const hasExistingMasterAgreements = Array.isArray(existingMasterAgreements) && existingMasterAgreements.length > 0;
+        const shouldPreserve = this.shouldPreserveLocalChanges();
+        
+        // Check if inScope data was already processed
+        const inScopeObj = cloneData.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements;
+        const inScopeAlreadyProcessed = inScopeObj && (inScopeObj.processed || inScopeObj.userModified);
         
         // Only process inScope data if:
         // 1. No existing master agreements AND
         // 2. No user modifications AND  
-        // 3. Not preserving local changes
-        const shouldPreserve = this.shouldPreserveLocalChanges();
-        
-        if (!hasExistingMasterAgreements && !hasUserModifications && !shouldPreserve) {
+        // 3. Not preserving local changes AND
+        // 4. InScope data hasn't been processed already
+        if (!hasExistingMasterAgreements && 
+            !hasUserModifications && 
+            !shouldPreserve && 
+            !inScopeAlreadyProcessed) {
             this.handleOnInsertInScopeMasterAgreementsList(cloneData);
         }
         
@@ -694,21 +765,6 @@ class XMProfileFields extends Component {
             const crossMarginEntities = data.compositeProfile.legalAgreement.attributes.crossMarginEntities.value;
             if (crossMarginEntities.length > 0) {
                 const firstEntity = crossMarginEntities[0];
-                /*if (firstEntity.counterParty) {
-                    traverseObjectAndInsert({
-                        obj: data,
-                        string: 'compositeProfile.legalAgreement.attributes.eci',
-                        bindOn: 'eci',
-                        newValues: firstEntity.counterParty.eci
-                    });
-
-                    traverseObjectAndInsert({
-                        obj: data,
-                        string: 'compositeProfile.legalAgreement.attributes.spn',
-                        bindOn: 'spn',
-                        newValues: firstEntity.counterParty.spn
-                    });
-                }*/
                 const flattenedAgreements = this.processLegalAgreementProfiles(data);
                 traverseObjectAndInsert({
                     obj: data,
@@ -724,14 +780,18 @@ class XMProfileFields extends Component {
         }
     };
 
-    handleOnInsertInScopeMasterAgreementsList = (data) =>{
+    // NEW: Enhanced inScope processing with better preservation tracking
+    handleOnInsertInScopeMasterAgreementsList = (data) => {
         if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
             const inScopeObj = data.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements;
             
-            // Check if already processed to avoid re-processing user modifications
-            if (inScopeObj && inScopeObj.processed) {
+            // Enhanced check for processed state
+            if (inScopeObj && (inScopeObj.processed || inScopeObj.userModified)) {
+                console.log('InScope master agreements already processed, skipping...');
                 return;
             }
+            
+            const flattenedData = this.handleOnScopeMasterAgreementsFlattenData(data);
             
             traverseObjectAndInsert({
                 obj: data,
@@ -740,9 +800,18 @@ class XMProfileFields extends Component {
                 newValues: {
                     source: 'USER',
                     sourceId: this.props.userInfo?.username || 'system',
-                    value: this.handleOnScopeMasterAgreementsFlattenData(data)
+                    value: flattenedData
                 }
             });
+            
+            // Mark as processed to prevent future re-processing
+            if (inScopeObj) {
+                inScopeObj.processed = true;
+                inScopeObj.processedAt = moment().format("YYYY-MM-DD HH:mm:ss.SSS");
+                inScopeObj.processedBy = this.props.userInfo?.username || 'system';
+            }
+            
+            console.log('InScope master agreements processed and flattened:', flattenedData.length, 'agreements');
         }
     };
 
@@ -759,7 +828,13 @@ class XMProfileFields extends Component {
                         eci: legalOwner[0]?.eci,
                         profileType: item?.attributes?.masterDocType?.value,
                         legalEntityId:legalOwner[0]?.sapLeCode,
-                        legalEntity: legalOwner[0]?.name
+                        legalEntity: legalOwner[0]?.name,
+                        // NEW: Add metadata for tracking
+                        createdAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+                        updatedAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+                        createdBy: 'SYSTEM_INSCOPE_CONVERSION',
+                        updatedBy: 'SYSTEM_INSCOPE_CONVERSION',
+                        status: 'LIVE'
                     });
                 });
             }
@@ -820,7 +895,6 @@ class XMProfileFields extends Component {
 
         if (refKey === "masterAgreements") {
             api.addEventListener('selectionChanged', this.onSelectionChanged);
-            // Removed double-click edit functionality as requested
 
             const masterAgreements = this.getCurrentMasterAgreements();
             const validMasterAgreements = Array.isArray(masterAgreements) ? masterAgreements : [];
@@ -876,191 +950,171 @@ class XMProfileFields extends Component {
         });
     };
 
-    shouldPreserveLocalChanges = () => {
-        const { hasLocalChanges, lastSavedData, isInitialized } = this.state;
-        
-        if (!isInitialized) return false;
-        
-        // Check if user has made modifications (this persists across component lifecycles)
-        if (this.hasUserModifiedMasterAgreements()) return true;
-        
-        // Check state-based preservation (only works within component lifecycle)
-        if (hasLocalChanges) return true;
-        
-        const currentAgreements = this.getCurrentMasterAgreements();
-        
-        if (!lastSavedData) {
-            return Array.isArray(currentAgreements) && currentAgreements.length > 0;
+    // New validation methods for SPN and ECID in agreement form
+    validateSpnOnBlur = async () => {
+        let clone = cloneObject(this.state.config);
+        let hasFieldChanges = false;
+        let currentSpnValue = null;
+
+        // First validate the SPN length
+        clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
+            x.column.forEach(form => {
+                if (form.title === 'SPN' && form.value !== undefined) {
+                    if (form.value === "" || form.value === null || typeof form.value === "undefined") {
+                        return;
+                    }
+
+                    currentSpnValue = form.value.toString().trim();
+                    if (currentSpnValue.length !== 7) {
+                        hasFieldChanges = true;
+                        MessageBox.error('Validation Error', 'SPN must be exactly 7 characters long.', 500);
+                    }
+                }
+            });
+        });
+
+        // If SPN length is valid, call API to validate and get ECID
+        if (!hasFieldChanges && currentSpnValue && currentSpnValue.length === 7) {
+            try {
+                const validationResult = await API.validateEntityData(
+                    { spn: currentSpnValue },
+                    this.props.appState?.lob?.toUpperCase() || 'XM'
+                );
+
+                if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
+                    const entityData = validationResult.payload[0];
+
+                    // Update ECID field if entity data contains it
+                    if (entityData.eci) {
+                        // Update the config to populate ECID field
+                        clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
+                            x.column.forEach(form => {
+                                if (form.title === 'ECID') {
+                                    form.value = entityData.eci;
+                                    hasFieldChanges = true;
+                                }
+                            });
+                        });
+
+                        // Update the form data
+                        let formData = cloneObject(this.props.data || {});
+                        this.initializeProfileData(formData);
+
+                        this.updateFieldInFormData(formData, 'compositeProfile.legalAgreement.attributes.eci', entityData.eci, 'USER');
+
+                        if (this.props.onCustFormUpdate) {
+                            this.props.onCustFormUpdate(formData);
+                        }
+
+                        MessageBox.alert('Success', `ECID ${entityData.eci} has been populated from SPN validation.`, 500);
+                    }
+                } else {
+                    MessageBox.error('Validation Error', 'Invalid SPN. No matching entity found.', 500);
+                }
+            } catch (error) {
+                console.warn('SPN validation failed:', error);
+                MessageBox.error('Validation Error', 'SPN validation failed. Please check the value and try again.', 500);
+            }
         }
-        
-        return JSON.stringify(currentAgreements) !== JSON.stringify(lastSavedData);
+
+        if (hasFieldChanges) {
+            this.setState({ config: clone, ready: false }, () => {
+                this.setState({ ready: true });
+            });
+        }
     };
 
-    // New validation methods for SPN and ECID in agreement form
-   validateSpnOnBlur = async () => {
-    let clone = cloneObject(this.state.config);
-    let hasFieldChanges = false;
-    let currentSpnValue = null;
+    validateEcidOnBlur = async () => {
+        let clone = cloneObject(this.state.config);
+        let hasFieldChanges = false;
+        let currentEcidValue = null;
 
-    // First validate the SPN length
-    clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
-        x.column.forEach(form => {
-            if (form.title === 'SPN' && form.value !== undefined) {
-                if (form.value === "" || form.value === null || typeof form.value === "undefined") {
-                    return;
-                }
-
-                currentSpnValue = form.value.toString().trim();
-                if (currentSpnValue.length !== 7) {
-                    hasFieldChanges = true;
-                    MessageBox.error('Validation Error', 'SPN must be exactly 7 characters long.', 500);
-                }
-            }
-        });
-    });
-
-    // If SPN length is valid, call API to validate and get ECID
-    if (!hasFieldChanges && currentSpnValue && currentSpnValue.length === 7) {
-        try {
-            const validationResult = await API.validateEntityData(
-                { spn: currentSpnValue },
-                this.props.appState?.lob?.toUpperCase() || 'XM'
-            );
-
-            if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
-                const entityData = validationResult.payload[0];
-
-                // Update ECID field if entity data contains it
-                if (entityData.eci) {
-                    // Update the config to populate ECID field
-                    clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
-                        x.column.forEach(form => {
-                            if (form.title === 'ECID') {
-                                form.value = entityData.eci;
-                                hasFieldChanges = true;
-                            }
-                        });
-                    });
-
-                    // Update the form data
-                    let formData = cloneObject(this.props.data || {});
-                    this.initializeProfileData(formData);
-
-                    this.updateFieldInFormData(formData, 'compositeProfile.legalAgreement.attributes.eci', entityData.eci, 'USER');
-
-                    if (this.props.onCustFormUpdate) {
-                        this.props.onCustFormUpdate(formData);
+        // First validate the ECID length
+        clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
+            x.column.forEach(form => {
+                if (form.title === 'ECID' && form.value !== undefined) {
+                    if (form.value === "" || form.value === null || typeof form.value === "undefined") {
+                        return;
                     }
 
-                    MessageBox.alert('Success', `ECID ${entityData.eci} has been populated from SPN validation.`, 500);
+                    currentEcidValue = form.value.toString().trim();
+                    if (currentEcidValue.length !== 10) {
+                        hasFieldChanges = true;
+                        MessageBox.error('Validation Error', 'ECID must be exactly 10 characters long.', 500);
+                    }
                 }
-            } else {
-                MessageBox.error('Validation Error', 'Invalid SPN. No matching entity found.', 500);
+            });
+        });
+
+        // If ECID length is valid, call API to validate and get SPN
+        if (!hasFieldChanges && currentEcidValue && currentEcidValue.length === 10) {
+            try {
+                const validationResult = await API.validateEntityData(
+                    { eci: currentEcidValue },
+                    this.props.appState?.lob?.toUpperCase() || 'XM'
+                );
+
+                if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
+                    const entityData = validationResult.payload[0];
+
+                    // Update SPN field if entity data contains it
+                    if (entityData.spn) {
+                        // Update the config to populate SPN field
+                        clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
+                            x.column.forEach(form => {
+                                if (form.title === 'SPN') {
+                                    form.value = entityData.spn;
+                                    hasFieldChanges = true;
+                                }
+                            });
+                        });
+
+                        let formData = cloneObject(this.props.data || {});
+                        this.initializeProfileData(formData);
+
+                        this.updateFieldInFormData(formData, 'compositeProfile.legalAgreement.attributes.spn', entityData.spn, 'USER');
+
+                        if (this.props.onCustFormUpdate) {
+                            this.props.onCustFormUpdate(formData);
+                        }
+
+                        MessageBox.alert('Success', `SPN ${entityData.spn} has been populated from ECID validation.`, 500);
+                    }
+
+                    if (entityData.name) {
+                        clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
+                            x.column.forEach(form => {
+                                if (form.title === 'Counterparty') {
+                                    form.value = entityData.name;
+                                    hasFieldChanges = true;
+                                }
+                            });
+                        });
+
+                        let formData = cloneObject(this.props.data || {});
+                        this.initializeProfileData(formData);
+
+                        this.updateFieldInFormData(formData, 'compositeProfile.legalAgreement.attributes.counterparty', entityData.name, 'USER');
+
+                        if (this.props.onCustFormUpdate) {
+                            this.props.onCustFormUpdate(formData);
+                        }
+                    }
+                } else {
+                    MessageBox.error('Validation Error', 'Invalid ECID. No matching entity found.', 500);
+                }
+            } catch (error) {
+                console.warn('ECID validation failed:', error);
+                MessageBox.error('Validation Error', 'ECID validation failed. Please check the value and try again.', 500);
             }
-        } catch (error) {
-            console.warn('SPN validation failed:', error);
-            MessageBox.error('Validation Error', 'SPN validation failed. Please check the value and try again.', 500);
         }
-    }
 
-    if (hasFieldChanges) {
-        this.setState({ config: clone, ready: false }, () => {
-            this.setState({ ready: true });
-        });
-    }
-};
-
-   validateEcidOnBlur = async () => {
-    let clone = cloneObject(this.state.config);
-    let hasFieldChanges = false;
-    let currentEcidValue = null;
-
-    // First validate the ECID length
-    clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
-        x.column.forEach(form => {
-            if (form.title === 'ECID' && form.value !== undefined) {
-                if (form.value === "" || form.value === null || typeof form.value === "undefined") {
-                    return;
-                }
-
-                currentEcidValue = form.value.toString().trim();
-                if (currentEcidValue.length !== 10) {
-                    hasFieldChanges = true;
-                    MessageBox.error('Validation Error', 'ECID must be exactly 10 characters long.', 500);
-                }
-            }
-        });
-    });
-
-    // If ECID length is valid, call API to validate and get SPN
-    if (!hasFieldChanges && currentEcidValue && currentEcidValue.length === 10) {
-        try {
-            const validationResult = await API.validateEntityData(
-                { eci: currentEcidValue },
-                this.props.appState?.lob?.toUpperCase() || 'XM'
-            );
-
-            if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
-                const entityData = validationResult.payload[0];
-
-                // Update SPN field if entity data contains it
-                if (entityData.spn) {
-                    // Update the config to populate SPN field
-                    clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
-                        x.column.forEach(form => {
-                            if (form.title === 'SPN') {
-                                form.value = entityData.spn;
-                                hasFieldChanges = true;
-                            }
-                        });
-                    });
-
-                    let formData = cloneObject(this.props.data || {});
-                    this.initializeProfileData(formData);
-
-                    this.updateFieldInFormData(formData, 'compositeProfile.legalAgreement.attributes.spn', entityData.spn, 'USER');
-
-                    if (this.props.onCustFormUpdate) {
-                        this.props.onCustFormUpdate(formData);
-                    }
-
-                    MessageBox.alert('Success', `SPN ${entityData.spn} has been populated from ECID validation.`, 500);
-                }
-
-                if (entityData.name) {
-                    clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
-                        x.column.forEach(form => {
-                            if (form.title === 'Counterparty') {
-                                form.value = entityData.name;
-                                hasFieldChanges = true;
-                            }
-                        });
-                    });
-
-                    let formData = cloneObject(this.props.data || {});
-                    this.initializeProfileData(formData);
-
-                    this.updateFieldInFormData(formData, 'compositeProfile.legalAgreement.attributes.counterparty', entityData.name, 'USER');
-
-                    if (this.props.onCustFormUpdate) {
-                        this.props.onCustFormUpdate(formData);
-                    }
-                }
-            } else {
-                MessageBox.error('Validation Error', 'Invalid ECID. No matching entity found.', 500);
-            }
-        } catch (error) {
-            console.warn('ECID validation failed:', error);
-            MessageBox.error('Validation Error', 'ECID validation failed. Please check the value and try again.', 500);
+        if (hasFieldChanges) {
+            this.setState({ config: clone, ready: false }, () => {
+                this.setState({ ready: true });
+            });
         }
-    }
-
-    if (hasFieldChanges) {
-        this.setState({ config: clone, ready: false }, () => {
-            this.setState({ ready: true });
-        });
-    }
-};
+    };
 
     validateStringFieldOnBlur = (fieldTitle, requiredLength, errorMessage) => {
         let clone = cloneObject(this.state.config);
@@ -1091,74 +1145,74 @@ class XMProfileFields extends Component {
         }
     };
 
-  validateLegalEntityIdOnBlur = async () => {
-    let modalFormData = this.state.modal.formdata;
-    let hasValidationError = false;
-    let currentLegalEntityId = null;
+    validateLegalEntityIdOnBlur = async () => {
+        let modalFormData = this.state.modal.formdata;
+        let hasValidationError = false;
+        let currentLegalEntityId = null;
 
-    if (modalFormData && modalFormData.data && modalFormData.data[0] && modalFormData.data[0].column) {
-        modalFormData.data[0].column.forEach(field => {
-            if (field.bind === 'legalEntityId' && field.value !== undefined) {
-                if (field.value === "" || field.value === null || typeof field.value === "undefined") {
-                    return;
-                }
-
-                currentLegalEntityId = field.value.toString().trim();
-            }
-        });
-    }
-
-    if (currentLegalEntityId && currentLegalEntityId.length > 0) {
-        try {
-            const validationResult = await API.validateEntityData(
-                { lei: currentLegalEntityId },
-                this.props.appState?.lob?.toUpperCase() || 'XM'
-            );
-
-            if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
-                const entityData = validationResult.payload[0];
-
-                this.setState({
-                    modal: {
-                        ...this.state.modal,
-                        disabled: false
+        if (modalFormData && modalFormData.data && modalFormData.data[0] && modalFormData.data[0].column) {
+            modalFormData.data[0].column.forEach(field => {
+                if (field.bind === 'legalEntityId' && field.value !== undefined) {
+                    if (field.value === "" || field.value === null || typeof field.value === "undefined") {
+                        return;
                     }
-                });
 
-                MessageBox.alert('Success', 'Legal Entity ID has been validated successfully.', 500);
+                    currentLegalEntityId = field.value.toString().trim();
+                }
+            });
+        }
 
-                if (entityData.name && modalFormData && modalFormData.data && modalFormData.data[0] && modalFormData.data[0].column) {
-                    modalFormData.data[0].column.forEach(field => {
-                        if (field.bind === 'legalEntity' && (!field.value || field.value.trim() === '')) {
-                            field.value = entityData.name;
-                        }
-                    });
+        if (currentLegalEntityId && currentLegalEntityId.length > 0) {
+            try {
+                const validationResult = await API.validateEntityData(
+                    { lei: currentLegalEntityId },
+                    this.props.appState?.lob?.toUpperCase() || 'XM'
+                );
+
+                if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
+                    const entityData = validationResult.payload[0];
 
                     this.setState({
                         modal: {
                             ...this.state.modal,
-                            formdata: modalFormData
+                            disabled: false
                         }
                     });
-                }
-            } else {
-                hasValidationError = true;
-                MessageBox.error('Validation Error', 'Invalid Legal Entity ID. No matching entity found in the system.', 500);
-            }
-        } catch (error) {
-            console.warn('Legal Entity ID validation failed:', error);
-            hasValidationError = true;
-            MessageBox.error('Validation Error', 'Legal Entity ID validation failed. Please check the value and try again.', 500);
-        }
-    }
 
-    this.setState({
-        modal: {
-            ...this.state.modal,
-            disabled: hasValidationError
+                    MessageBox.alert('Success', 'Legal Entity ID has been validated successfully.', 500);
+
+                    if (entityData.name && modalFormData && modalFormData.data && modalFormData.data[0] && modalFormData.data[0].column) {
+                        modalFormData.data[0].column.forEach(field => {
+                            if (field.bind === 'legalEntity' && (!field.value || field.value.trim() === '')) {
+                                field.value = entityData.name;
+                            }
+                        });
+
+                        this.setState({
+                            modal: {
+                                ...this.state.modal,
+                                formdata: modalFormData
+                            }
+                        });
+                    }
+                } else {
+                    hasValidationError = true;
+                    MessageBox.error('Validation Error', 'Invalid Legal Entity ID. No matching entity found in the system.', 500);
+                }
+            } catch (error) {
+                console.warn('Legal Entity ID validation failed:', error);
+                hasValidationError = true;
+                MessageBox.error('Validation Error', 'Legal Entity ID validation failed. Please check the value and try again.', 500);
+            }
         }
-    });
-};
+
+        this.setState({
+            modal: {
+                ...this.state.modal,
+                disabled: hasValidationError
+            }
+        });
+    };
 
     validateHouseMultiplierOnBlur = () => {
         this.validateFieldOnBlur(
@@ -1280,9 +1334,14 @@ class XMProfileFields extends Component {
             this.props.onCustFormUpdate(completeFormData);
         }
 
+        // NEW: Enhanced state tracking on form updates
         this.setState({
             hasLocalChanges: true,
-            lastUpdateTimestamp: Date.now()
+            lastUpdateTimestamp: Date.now(),
+            preservationState: {
+                ...this.state.preservationState,
+                preserveChanges: true
+            }
         });
     };
 
