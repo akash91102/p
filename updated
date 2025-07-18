@@ -57,7 +57,6 @@ class XMProfileFields extends Component {
             toggleState: true,
             ready: true,
             selectedRows: [],
-            masterAgreements: [], // Add this to track master agreements in state
             modal: {
                 disabled: null,
                 show: false,
@@ -327,6 +326,7 @@ class XMProfileFields extends Component {
 
                             this.updateMasterAgreements(updatedAgreements, () => {
                                 this.setState({ resetTable: false, selectedRows: [] });
+                                this.rebuildCrossMarginEntities(updatedAgreements);
                             });
                         } else {
                             this.setState({ resetTable: false });
@@ -375,6 +375,114 @@ class XMProfileFields extends Component {
         }
 
         return populatedFormData;
+    };
+
+    // Added missing method from working version
+    rebuildCrossMarginEntities = (masterAgreements) => {
+        let formData = cloneObject(this.props.data || {});
+        const crossMarginEntitiesPath = 'compositeProfile.legalAgreement.attributes.crossMarginEntities';
+        
+        let crossMarginEntities = traverseObjectAndReturn({obj: formData, string: crossMarginEntitiesPath});
+        if (!crossMarginEntities) {
+            crossMarginEntities = {
+                source: 'USER',
+                sourceId: this.props.userInfo?.username || 'system',
+                value: []
+            };
+        }
+
+        const validAgreements = Array.isArray(masterAgreements) ? masterAgreements : [];
+
+        if (validAgreements.length === 0) {
+            crossMarginEntities.value = [];
+        } else {
+            const groupedAgreements = {};
+            validAgreements.forEach(agreement => {
+                const entityKey = `${agreement.eci || 'unknown'}_${agreement.legalEntityId || 'unknown'}`;
+                if (!groupedAgreements[entityKey]) {
+                    groupedAgreements[entityKey] = {
+                        eci: agreement.eci || '',
+                        legalEntityId: agreement.legalEntityId || '',
+                        legalEntity: agreement.legalEntity || '',
+                        ucn: agreement.ucn || '',
+                        spn: agreement.spn || '',
+                        agreements: {}
+                    };
+                }
+                
+                const lobKey = agreement.lineOfBusiness || 'UNKNOWN';
+                if (!groupedAgreements[entityKey].agreements[lobKey]) {
+                    groupedAgreements[entityKey].agreements[lobKey] = [];
+                }
+                
+                groupedAgreements[entityKey].agreements[lobKey].push({
+                    profileId: agreement.agreementId,
+                    lineOfBusiness: agreement.lineOfBusiness,
+                    profileType: agreement.profileType,
+                    profileStatus: agreement.status,
+                    version: agreement.version || 1,
+                    createdBy: agreement.createdBy,
+                    updatedBy: agreement.updatedBy,
+                    createdDtm: agreement.createdAt,
+                    updatedDtm: agreement.updatedAt,
+                    attributes: null,
+                    approvedDtm: null,
+                    approvedBy: null,
+                    comments: null,
+                    activationDtm: null
+                });
+            });
+
+            crossMarginEntities.value = Object.values(groupedAgreements).map(group => ({
+                counterParty: {
+                    role: "COUNTERPARTY",
+                    eci: group.eci,
+                    ucn: group.ucn,
+                    spn: group.spn,
+                    name: group.legalEntity,
+                    lei: null,
+                    sapLeCode: null,
+                    principalLei: null,
+                    principalEci: null,
+                    cbd: null,
+                    leCode: null,
+                    goldenEntityEci: null,
+                    goldenEntityName: null
+                },
+                legalEntities: [{
+                    legalEntity: {
+                        role: "LEGAL_OWNER",
+                        eci: group.eci,
+                        ucn: group.ucn,
+                        spn: group.spn,
+                        name: group.legalEntity,
+                        lei: null,
+                        sapLeCode: null,
+                        principalLei: null,
+                        principalEci: null,
+                        cbd: null,
+                        leCode: null,
+                        goldenEntityEci: null,
+                        goldenEntityName: null
+                    },
+                    legalAgreementProfiles: group.agreements
+                }]
+            }));
+        }
+
+        crossMarginEntities.source = 'USER';
+        crossMarginEntities.sourceId = this.props.userInfo?.username || 'system';
+
+        traverseObjectAndInsert({
+            obj: formData,
+            string: crossMarginEntitiesPath,
+            bindOn: 'crossMarginEntities',
+            newValues: crossMarginEntities
+        });
+
+        if (this.props.onCustFormUpdate) {
+            this.props.onCustFormUpdate(formData);
+        }
     };
 
     handleMasterAgreementUpdate = (agreementData) => {
@@ -462,23 +570,13 @@ class XMProfileFields extends Component {
         });
     }
 
-    // Fixed componentDidUpdate - uncommented and properly implemented
     componentDidUpdate(prevProps) {
         if (prevProps.data !== this.props.data && this.props.data) {
             const newMasterAgreements = this.getCurrentMasterAgreements();
             const validNewAgreements = Array.isArray(newMasterAgreements) ? newMasterAgreements : [];
 
-            const currentStateAgreements = Array.isArray(this.state.masterAgreements) ? this.state.masterAgreements : [];
-
-            if (JSON.stringify(validNewAgreements) !== JSON.stringify(currentStateAgreements)) {
-                this.setState({
-                    masterAgreements: [...validNewAgreements],
-                    hasLocalChanges: false
-                });
-
-                if (this.gridApiRefs["masterAgreements"]) {
-                    this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
-                }
+            if (this.gridApiRefs["masterAgreements"]) {
+                this.gridApiRefs["masterAgreements"].setRowData([...validNewAgreements]);
             }
         }
     }
@@ -486,14 +584,9 @@ class XMProfileFields extends Component {
     setup = (config) => {
         let cloneData = cloneObject(this.props.data || {});
         this.initializeProfileData(cloneData);
-        
-        // Process inScope master agreements if they exist
-        if (objectExists(cloneData, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
-            this.handleOnInsertInScopeMasterAgreementsList(cloneData);
-        }
-        
-        // Process parties data for ECI and SPN
-        this.handleOnInsertInECPAndSPN(cloneData);
+
+        // Use processAndFlattenData instead of individual handlers
+        this.processAndFlattenData(cloneData);
 
         let configSetupVar = configSetup({
             config,
@@ -509,75 +602,91 @@ class XMProfileFields extends Component {
         }
     };
 
-    handleOnInsertInECPAndSPN = (data) => {
-        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.parties.value')) {
-            const partiesObj = data.compositeProfile.legalAgreement.attributes.parties.value;
-            if (partiesObj && partiesObj.length > 0) {
-                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.eci', 'eci', partiesObj[0]?.eci);
-                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.counterparty', 'counterparty', partiesObj[0]?.name);
-                this.handleOnTraverseObjectAndInsert(data, 'compositeProfile.legalAgreement.attributes.spn', 'spn', partiesObj[0]?.spn);
-            }
-        }
-    };
-
-    handleOnTraverseObjectAndInsert = (data, attribute, bindOn, value) => {
-        traverseObjectAndInsert({
-            obj: data,
-            string: attribute,
-            bindOn: bindOn,
-            newValues: value
-        });
-    };
-
-    handleOnInsertInScopeMasterAgreementsList = (data) => {
-        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
-            const flattenedAgreements = this.handleOnScopeMasterAgreementsFlattenData(data);
-            traverseObjectAndInsert({
-                obj: data,
-                string: 'compositeProfile.legalAgreement.attributes.masterAgreements',
-                bindOn: 'masterAgreements',
-                newValues: {
-                    source: 'USER',
-                    sourceId: this.props.userInfo?.username || 'system',
-                    value: flattenedAgreements
-                }
-            });
+    // Added missing method from working version
+    processAndFlattenData = (data) => {
+        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.crossMarginEntities.value')) {
+            const crossMarginEntities = data.compositeProfile.legalAgreement.attributes.crossMarginEntities.value;
             
-            // Update state with the flattened agreements
-            this.setState({
-                masterAgreements: flattenedAgreements
-            });
-        }
-    };
+            if (crossMarginEntities.length > 0) {
+                const firstEntity = crossMarginEntities[0];
+                
+                if (firstEntity.counterParty) {
+                    traverseObjectAndInsert({
+                        obj: data,
+                        string: 'compositeProfile.legalAgreement.attributes.eci',
+                        bindOn: 'eci',
+                        newValues: firstEntity.counterParty.eci
+                    });
+                    
+                    traverseObjectAndInsert({
+                        obj: data,
+                        string: 'compositeProfile.legalAgreement.attributes.spn',
+                        bindOn: 'spn',
+                        newValues: firstEntity.counterParty.spn
+                    });
+                }
 
-    handleOnScopeMasterAgreementsFlattenData = (data) => {
-        let inScopeMasterAgreementsList = [];
-        if (objectExists(data, 'compositeProfile.legalAgreement.attributes.inScopeMasterAgreements.value')) {
-            const inScopeMasterAgreeValue = data.compositeProfile?.legalAgreement?.attributes?.inScopeMasterAgreements?.value;
-            if (inScopeMasterAgreeValue && inScopeMasterAgreeValue.length > 0) {
-                inScopeMasterAgreeValue.forEach(item => {
-                    if (item?.attributes?.parties?.value) {
-                        const legalOwner = item.attributes.parties.value.filter(v => v.role === "LEGAL_OWNER");
-                        if (legalOwner && legalOwner.length > 0) {
-                            inScopeMasterAgreementsList.push({
-                                lineOfBusiness: item?.lineOfBusiness || '',
-                                agreementId: item?.attributes?.masterAgreementNumber?.value || '',
-                                eci: legalOwner[0]?.eci || '',
-                                profileType: item?.attributes?.masterDocType?.value || '',
-                                legalEntityId: legalOwner[0]?.sapLeCode || '',
-                                legalEntity: legalOwner[0]?.name || '',
-                                status: 'LIVE',
-                                createdAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
-                                updatedAt: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
-                                createdBy: 'System',
-                                updatedBy: 'System'
-                            });
-                        }
+                const flattenedAgreements = this.processLegalAgreementProfiles(data);
+         
+                traverseObjectAndInsert({
+                    obj: data,
+                    string: 'compositeProfile.legalAgreement.attributes.masterAgreements',
+                    bindOn: 'masterAgreements',
+                    newValues: {
+                        source: 'USER',
+                        sourceId: this.props.userInfo?.username || 'system',
+                        value: flattenedAgreements
                     }
                 });
             }
         }
-        return inScopeMasterAgreementsList;
+    };
+
+    // Added missing method from working version
+    processLegalAgreementProfiles = (data) => {
+        let legalAgreementProfiles = [];
+        const crossMarginEntities = data?.compositeProfile?.legalAgreement?.attributes?.crossMarginEntities?.value;
+
+        if (Array.isArray(crossMarginEntities) && crossMarginEntities.length > 0) {
+            crossMarginEntities.forEach((entityItem) => {
+                const legalEntities = entityItem?.legalEntities;
+                if (Array.isArray(legalEntities) && legalEntities.length > 0) {
+                    legalEntities.forEach((entity) => {
+                        const profilesObj = entity?.legalAgreementProfiles;
+                        const legalEntity = entity?.legalEntity;
+                        
+                        if (profilesObj && typeof profilesObj === 'object') {
+                            Object.keys(profilesObj).forEach(agreementType => {
+                                const profiles = profilesObj[agreementType];
+                                if (Array.isArray(profiles)) {
+                                    profiles.forEach((profile) => {
+                                        legalAgreementProfiles.push({
+                                            agreementId: profile.profileId,
+                                            lineOfBusiness: profile.lineOfBusiness,
+                                            agreementCategory: agreementType,
+                                            profileType: profile.profileType,
+                                            legalEntityId: legalEntity?.ucn || '',
+                                            legalEntity: legalEntity?.name || profile.lineOfBusiness,
+                                            status: profile.profileStatus,
+                                            updatedBy: profile.updatedBy,
+                                            updatedAt: profile.updatedDtm,
+                                            createdBy: profile.createdBy,
+                                            createdAt: profile.createdDtm,
+                                            version: profile.version,
+                                            eci: legalEntity?.eci || '',
+                                            _originalData: profile,
+                                            _agreementType: agreementType
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        return legalAgreementProfiles;
     };
 
     initializeProfileData = (data) => {
@@ -684,6 +793,7 @@ class XMProfileFields extends Component {
 
         this.updateMasterAgreements(updatedAgreements, () => {
             this.setState({ selectedRows: [] });
+            this.rebuildCrossMarginEntities(updatedAgreements);
         });
     };
 
@@ -692,7 +802,6 @@ class XMProfileFields extends Component {
         let hasFieldChanges = false;
         let currentSpnValue = null;
 
-        // First validate the SPN length
         clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
             x.column.forEach(form => {
                 if (form.title === 'SPN' && form.value !== undefined) {
@@ -709,7 +818,6 @@ class XMProfileFields extends Component {
             });
         });
 
-        // If SPN length is valid, call API to validate and get ECID
         if (!hasFieldChanges && currentSpnValue && currentSpnValue.length === 7) {
             try {
                 const validationResult = await API.validateEntityData(
@@ -720,9 +828,7 @@ class XMProfileFields extends Component {
                 if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
                     const entityData = validationResult.payload[0];
 
-                    // Update ECID field if entity data contains it
                     if (entityData.eci) {
-                        // Update the config to populate ECID field
                         clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
                             x.column.forEach(form => {
                                 if (form.title === 'ECID') {
@@ -732,7 +838,6 @@ class XMProfileFields extends Component {
                             });
                         });
 
-                        // Update the form data
                         let formData = cloneObject(this.props.data || {});
                         this.initializeProfileData(formData);
 
@@ -765,7 +870,6 @@ class XMProfileFields extends Component {
         let hasFieldChanges = false;
         let currentEcidValue = null;
 
-        // First validate the ECID length
         clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
             x.column.forEach(form => {
                 if (form.title === 'ECID' && form.value !== undefined) {
@@ -782,7 +886,6 @@ class XMProfileFields extends Component {
             });
         });
 
-        // If ECID length is valid, call API to validate and get SPN
         if (!hasFieldChanges && currentEcidValue && currentEcidValue.length === 10) {
             try {
                 const validationResult = await API.validateEntityData(
@@ -793,9 +896,7 @@ class XMProfileFields extends Component {
                 if (validationResult.success && validationResult.payload && validationResult.payload.length > 0) {
                     const entityData = validationResult.payload[0];
 
-                    // Update SPN field if entity data contains it
                     if (entityData.spn) {
-                        // Update the config to populate SPN field
                         clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
                             x.column.forEach(form => {
                                 if (form.title === 'SPN') {
@@ -855,8 +956,6 @@ class XMProfileFields extends Component {
     validateStringFieldOnBlur = (fieldTitle, requiredLength, errorMessage) => {
         let clone = cloneObject(this.state.config);
         let hasFieldChanges = false;
-        let updatedFieldBinding = null;
-        let updatedFieldValue = null;
 
         clone.layout.find(x => x.refKey === 'agreement').data.forEach(x => {
             x.column.forEach(form => {
@@ -1058,6 +1157,14 @@ class XMProfileFields extends Component {
         }
 
         this.initializeProfileData(completeFormData);
+
+        // Added structural change handling
+        if (hasStructuralChanges && sectionRefKey !== 'crossMarginEntities') {
+            const currentAgreements = this.getCurrentMasterAgreements();
+            if (Array.isArray(currentAgreements) && currentAgreements.length > 0) {
+                this.rebuildCrossMarginEntities(currentAgreements);
+            }
+        }
 
         if (this.props.onCustFormUpdate) {
             this.props.onCustFormUpdate(completeFormData);
